@@ -57,9 +57,9 @@ beta1 = 0.9
 def make_encoder_model():
     inputs = tf.keras.Input(shape=(image_size,))
     x = tf.keras.layers.Dense(h_dim, activation='relu')(inputs)
-    x = tf.keras.layers.Dense(0.1)(x)
+    x = tf.keras.layers.Dropout(0.1)(x)
     x = tf.keras.layers.Dense(h_dim, activation='relu')(x)
-    x = tf.keras.layers.Dense(0.1)(x)
+    x = tf.keras.layers.Dropout(0.1)(x)
     encoded = tf.keras.layers.Dense(z_dim)(x)
     model = tf.keras.Model(inputs=inputs, outputs=encoded)
     return model
@@ -68,9 +68,9 @@ def make_encoder_model():
 def make_decoder_model():
     encoded = tf.keras.Input(shape=(z_dim + n_labels,))
     x = tf.keras.layers.Dense(h_dim, activation='relu')(encoded)
-    x = tf.keras.layers.Dense(0.1)(x)
+    x = tf.keras.layers.Dropout(0.1)(x)
     x = tf.keras.layers.Dense(h_dim, activation='relu')(x)
-    x = tf.keras.layers.Dense(0.1)(x)
+    x = tf.keras.layers.Dropout(0.1)(x)
     reconstruction = tf.keras.layers.Dense(image_size, activation='sigmoid')(x)
     model = tf.keras.Model(inputs=encoded, outputs=reconstruction)
     return model
@@ -79,9 +79,9 @@ def make_decoder_model():
 def make_discriminator_model():
     encoded = tf.keras.Input(shape=(z_dim,))
     x = tf.keras.layers.Dense(h_dim, activation='relu')(encoded)
-    x = tf.keras.layers.Dense(0.1)(x)
+    x = tf.keras.layers.Dropout(0.1)(x)
     x = tf.keras.layers.Dense(h_dim, activation='relu')(x)
-    x = tf.keras.layers.Dense(0.1)(x)
+    x = tf.keras.layers.Dropout(0.1)(x)
     reconstruction = tf.keras.layers.Dense(1)(x)
     model = tf.keras.Model(inputs=encoded, outputs=reconstruction)
     return model
@@ -115,10 +115,10 @@ decoder = make_decoder_model()
 discriminator = make_discriminator_model()
 
 ae_optimizer = tf.keras.optimizers.Adam(lr=learning_rate, beta_1=beta1)
-dc_optimizer = tf.keras.optimizers.Adam(lr=learning_rate, beta_1=beta1)
+dc_optimizer = tf.keras.optimizers.Adam(lr=learning_rate/5, beta_1=beta1)
 gen_optimizer = tf.keras.optimizers.Adam(lr=learning_rate, beta_1=beta1)
 
-batch_size = 100
+batch_size = 256
 # create the database iterator
 train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
 train_dataset = train_dataset.shuffle(buffer_size=1024)
@@ -133,11 +133,11 @@ def train_step(batch_x, batch_y):
     real_distribution = tf.random.normal([batch_size, z_dim], mean=0.0, stddev=1.0)
 
     with tf.GradientTape() as gen_tape, tf.GradientTape() as dc_tape, tf.GradientTape() as ae_tape:
-        encoder_output = encoder(batch_x)
-        decoder_output = decoder(tf.concat([encoder_output, tf.one_hot(batch_y,n_labels)], axis=1))
+        encoder_output = encoder(batch_x, training=True)
+        decoder_output = decoder(tf.concat([encoder_output, tf.one_hot(batch_y,n_labels)], axis=1), training=True)
 
-        d_real = discriminator(real_distribution)
-        d_fake = discriminator(encoder_output)
+        d_real = discriminator(real_distribution, training=True)
+        d_fake = discriminator(encoder_output, training=True)
 
         # Autoencoder loss
         ae_loss = autoencoder_loss(batch_x, decoder_output, ae_loss_weight)
@@ -186,7 +186,7 @@ for epoch in range(n_epochs):
                                                                                            epoch_gen_loss_avg.result()))
     if epoch % 5 == 0:
 
-        x_test_encoded = encoder(x_test[:2000])
+        x_test_encoded = encoder(x_test[:2000], training=False)
         label_list = list(y_test[:2000])
         fig = plt.figure()
         classes = set(label_list)
@@ -220,7 +220,7 @@ for epoch in range(n_epochs):
                 r = np.reshape(r, (1, z_dim))
                 t = np.reshape(t, (1, n_labels))
                 dec_input = np.concatenate((r, t), 1)
-                x = decoder(dec_input.astype('float32')).numpy()
+                x = decoder(dec_input.astype('float32'), training=False).numpy()
                 ax = plt.subplot(gs[i])
                 i += 1
                 img = np.array(x.tolist()).reshape(28, 28)
