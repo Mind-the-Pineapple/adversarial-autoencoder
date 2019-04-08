@@ -7,7 +7,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import matplotlib.patches as mpatches
-
 import numpy as np
 import tensorflow as tf
 
@@ -47,8 +46,8 @@ h_dim = 1000
 z_dim = 2
 n_labels = 10
 
-ae_loss_weight = 10.
-gen_loss_weight = 10.
+ae_loss_weight = 100.
+gen_loss_weight = 100.
 dc_loss_weight = 1
 
 learning_rate = 0.001
@@ -198,7 +197,7 @@ for epoch in range(n_epochs):
         ax.set_xlim([-10, 10])
         ax.set_ylim([-10, 10])
 
-        plt.savefig(PROJECT_ROOT + '/images/super_aae_latent/epoch_%d.png' % (epoch + 1), bbox_inches="tight")
+        plt.savefig(style_dir / ('epoch_%d.png' % (epoch + 1)))
         fig.clf()
         plt.close()
 
