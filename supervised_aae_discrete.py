@@ -57,9 +57,9 @@ beta1 = 0.9
 def make_encoder_model():
     inputs = tf.keras.Input(shape=(image_size,))
     x = tf.keras.layers.Dense(h_dim, activation='relu')(inputs)
-    x = tf.keras.layers.Dropout(0.1)(x)
+    x = tf.keras.layers.Dropout(0.5)(x)
     x = tf.keras.layers.Dense(h_dim, activation='relu')(x)
-    x = tf.keras.layers.Dropout(0.1)(x)
+    x = tf.keras.layers.Dropout(0.5)(x)
     encoded = tf.keras.layers.Dense(z_dim)(x)
     model = tf.keras.Model(inputs=inputs, outputs=encoded)
     return model
@@ -68,9 +68,9 @@ def make_encoder_model():
 def make_decoder_model():
     encoded = tf.keras.Input(shape=(z_dim + n_labels,))
     x = tf.keras.layers.Dense(h_dim, activation='relu')(encoded)
-    x = tf.keras.layers.Dropout(0.1)(x)
+    x = tf.keras.layers.Dropout(0.5)(x)
     x = tf.keras.layers.Dense(h_dim, activation='relu')(x)
-    x = tf.keras.layers.Dropout(0.1)(x)
+    x = tf.keras.layers.Dropout(0.5)(x)
     reconstruction = tf.keras.layers.Dense(image_size, activation='sigmoid')(x)
     model = tf.keras.Model(inputs=encoded, outputs=reconstruction)
     return model
@@ -79,9 +79,9 @@ def make_decoder_model():
 def make_discriminator_model():
     encoded = tf.keras.Input(shape=(z_dim,))
     x = tf.keras.layers.Dense(h_dim, activation='relu')(encoded)
-    x = tf.keras.layers.Dropout(0.1)(x)
+    x = tf.keras.layers.Dropout(0.5)(x)
     x = tf.keras.layers.Dense(h_dim, activation='relu')(x)
-    x = tf.keras.layers.Dropout(0.1)(x)
+    x = tf.keras.layers.Dropout(0.5)(x)
     reconstruction = tf.keras.layers.Dense(1)(x)
     model = tf.keras.Model(inputs=encoded, outputs=reconstruction)
     return model
@@ -178,7 +178,7 @@ for epoch in range(n_epochs):
         loss_value = dc_loss.numpy() + gen_loss.numpy() + ae_loss.numpy()
 
     epoch_time = time.time() - start
-    print('EPOCH: {}, TIME: {}, ETA: {},  AE_LOSS: {},  DC_LOSS: {},  GEN_LOSS: {}'.format(epoch + 1, epoch_time,
+    print('EPOCH: {}, TIME: {}, ETA: {},  AE_LOSS: {},  DC_LOSS: {},  GEN_LOSS: {}'.format(epoch, epoch_time,
                                                                                            epoch_time * (
                                                                                                        n_epochs - epoch),
                                                                                            epoch_ae_loss_avg.result(),
@@ -203,7 +203,7 @@ for epoch in range(n_epochs):
         ax.set_xlim([-10, 10])
         ax.set_ylim([-10, 10])
 
-        plt.savefig(latent_sampling_dir / ('epoch_%d.png' % (epoch + 1)))
+        plt.savefig(latent_sampling_dir / ('epoch_%d.png' % epoch))
         fig.clf()
         plt.close()
 
@@ -229,7 +229,7 @@ for epoch in range(n_epochs):
                 ax.set_yticks([])
                 ax.set_aspect('auto')
 
-        plt.savefig(style_dir / ('epoch_%d.png' % (epoch + 1)))
+        plt.savefig(style_dir / ('epoch_%d.png' % epoch))
         plt.close()
 
 
