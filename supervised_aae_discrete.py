@@ -56,9 +56,11 @@ beta1 = 0.9
 
 def make_encoder_model():
     inputs = tf.keras.Input(shape=(image_size,))
-    x = tf.keras.layers.Dense(h_dim, activation='relu')(inputs)
+    x = tf.keras.layers.Dense(h_dim)(inputs)
+    x = tf.keras.layers.LeakyReLU()(x)
     x = tf.keras.layers.Dropout(0.5)(x)
-    x = tf.keras.layers.Dense(h_dim, activation='relu')(x)
+    x = tf.keras.layers.Dense(h_dim)(x)
+    x = tf.keras.layers.LeakyReLU()(x)
     x = tf.keras.layers.Dropout(0.5)(x)
     encoded = tf.keras.layers.Dense(z_dim)(x)
     model = tf.keras.Model(inputs=inputs, outputs=encoded)
@@ -67,9 +69,11 @@ def make_encoder_model():
 
 def make_decoder_model():
     encoded = tf.keras.Input(shape=(z_dim + n_labels,))
-    x = tf.keras.layers.Dense(h_dim, activation='relu')(encoded)
+    x = tf.keras.layers.Dense(h_dim)(encoded)
+    x = tf.keras.layers.LeakyReLU()(x)
     x = tf.keras.layers.Dropout(0.5)(x)
-    x = tf.keras.layers.Dense(h_dim, activation='relu')(x)
+    x = tf.keras.layers.Dense(h_dim)(x)
+    x = tf.keras.layers.LeakyReLU()(x)
     x = tf.keras.layers.Dropout(0.5)(x)
     reconstruction = tf.keras.layers.Dense(image_size, activation='sigmoid')(x)
     model = tf.keras.Model(inputs=encoded, outputs=reconstruction)
@@ -78,9 +82,11 @@ def make_decoder_model():
 
 def make_discriminator_model():
     encoded = tf.keras.Input(shape=(z_dim,))
-    x = tf.keras.layers.Dense(h_dim, activation='relu')(encoded)
+    x = tf.keras.layers.Dense(h_dim)(encoded)
+    x = tf.keras.layers.LeakyReLU()(x)
     x = tf.keras.layers.Dropout(0.5)(x)
-    x = tf.keras.layers.Dense(h_dim, activation='relu')(x)
+    x = tf.keras.layers.Dense(h_dim)(x)
+    x = tf.keras.layers.LeakyReLU()(x)
     x = tf.keras.layers.Dropout(0.5)(x)
     reconstruction = tf.keras.layers.Dense(1)(x)
     model = tf.keras.Model(inputs=encoded, outputs=reconstruction)
