@@ -46,9 +46,9 @@ h_dim = 1000
 z_dim = 2
 n_labels = 10
 
-ae_loss_weight = 100.
-gen_loss_weight = 100.
-dc_loss_weight = 1
+ae_loss_weight = 1.
+gen_loss_weight = 1.
+dc_loss_weight = 1.
 
 learning_rate = 0.001
 beta1 = 0.9
@@ -57,7 +57,9 @@ beta1 = 0.9
 def make_encoder_model():
     inputs = tf.keras.Input(shape=(image_size,))
     x = tf.keras.layers.Dense(h_dim, activation='relu')(inputs)
+    x = tf.keras.layers.Dense(0.1)(x)
     x = tf.keras.layers.Dense(h_dim, activation='relu')(x)
+    x = tf.keras.layers.Dense(0.1)(x)
     encoded = tf.keras.layers.Dense(z_dim)(x)
     model = tf.keras.Model(inputs=inputs, outputs=encoded)
     return model
@@ -66,7 +68,9 @@ def make_encoder_model():
 def make_decoder_model():
     encoded = tf.keras.Input(shape=(z_dim + n_labels,))
     x = tf.keras.layers.Dense(h_dim, activation='relu')(encoded)
+    x = tf.keras.layers.Dense(0.1)(x)
     x = tf.keras.layers.Dense(h_dim, activation='relu')(x)
+    x = tf.keras.layers.Dense(0.1)(x)
     reconstruction = tf.keras.layers.Dense(image_size, activation='sigmoid')(x)
     model = tf.keras.Model(inputs=encoded, outputs=reconstruction)
     return model
@@ -75,7 +79,9 @@ def make_decoder_model():
 def make_discriminator_model():
     encoded = tf.keras.Input(shape=(z_dim,))
     x = tf.keras.layers.Dense(h_dim, activation='relu')(encoded)
+    x = tf.keras.layers.Dense(0.1)(x)
     x = tf.keras.layers.Dense(h_dim, activation='relu')(x)
+    x = tf.keras.layers.Dense(0.1)(x)
     reconstruction = tf.keras.layers.Dense(1)(x)
     model = tf.keras.Model(inputs=encoded, outputs=reconstruction)
     return model
@@ -124,7 +130,7 @@ test_dataset = test_dataset.batch(batch_size)
 
 @tf.function  # Make it fast.
 def train_step(batch_x, batch_y):
-    real_distribution = tf.random.normal([batch_size, z_dim])
+    real_distribution = tf.random.normal([batch_size, z_dim], mean=0.0, stddev=1.0)
 
     with tf.GradientTape() as gen_tape, tf.GradientTape() as dc_tape, tf.GradientTape() as ae_tape:
         encoder_output = encoder(batch_x)
@@ -162,8 +168,8 @@ for epoch in range(n_epochs):
     epoch_dc_loss_avg = tf.metrics.Mean()
     epoch_gen_loss_avg = tf.metrics.Mean()
 
-    for batch, (images, labels) in enumerate(train_dataset):
-        ae_loss, dc_loss, gen_loss = train_step(images, labels)
+    for batch, (batch_x, batch_y) in enumerate(train_dataset):
+        ae_loss, dc_loss, gen_loss = train_step(batch_x, batch_y)
 
         epoch_ae_loss_avg(ae_loss)
         epoch_dc_loss_avg(dc_loss)
@@ -197,7 +203,7 @@ for epoch in range(n_epochs):
         ax.set_xlim([-10, 10])
         ax.set_ylim([-10, 10])
 
-        plt.savefig(style_dir / ('epoch_%d.png' % (epoch + 1)))
+        plt.savefig(latent_sampling_dir / ('epoch_%d.png' % (epoch + 1)))
         fig.clf()
         plt.close()
 
