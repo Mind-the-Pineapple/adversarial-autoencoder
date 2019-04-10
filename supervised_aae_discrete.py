@@ -19,13 +19,16 @@ np.random.seed(42)
 output_dir = PROJECT_ROOT / 'outputs'
 output_dir.mkdir(exist_ok=True)
 
-latent_sampling_dir = output_dir / 'latent_sampling'
+experiment_dir = output_dir / 'supervised'
+experiment_dir.mkdir(exist_ok=True)
+
+latent_sampling_dir = experiment_dir / 'latent_sampling'
 latent_sampling_dir.mkdir(exist_ok=True)
 
-reconstruction_dir = output_dir / 'reconstruction'
+reconstruction_dir = experiment_dir / 'reconstruction'
 reconstruction_dir.mkdir(exist_ok=True)
 
-style_dir = output_dir / 'style'
+style_dir = experiment_dir / 'style'
 style_dir.mkdir(exist_ok=True)
 
 # Loading data
@@ -93,27 +96,23 @@ def make_discriminator_model():
     return model
 
 
+cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
+mse = tf.keras.losses.MeanSquaredError()
+
+
 def autoencoder_loss(inputs, reconstruction, loss_weigth):
-    loss = loss_weigth * tf.reduce_mean(tf.square(inputs - reconstruction))
-    return loss
+    return loss_weigth * mse(inputs, reconstruction)
 
 
 def discriminator_loss(real_output, generated_output, loss_weight):
-    loss_real = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(real_output), logits=real_output))
+    loss_real = cross_entropy(tf.ones_like(real_output), real_output)
+    loss_fake = cross_entropy(tf.zeros_like(generated_output), generated_output)
 
-    loss_fake = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.zeros_like(generated_output), logits=generated_output))
-
-    loss = loss_weight * (loss_fake + loss_real)
-    return loss
+    return loss_weight * (loss_fake + loss_real)
 
 
 def generator_loss(generated_output, loss_weight):
-    generator_loss = tf.reduce_mean(
-        tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(generated_output), logits=generated_output))
-    loss = loss_weight * generator_loss
-    return loss
+    return loss_weight * cross_entropy(tf.ones_like(generated_output), generated_output)
 
 
 encoder = make_encoder_model()
@@ -121,7 +120,7 @@ decoder = make_decoder_model()
 discriminator = make_discriminator_model()
 
 ae_optimizer = tf.keras.optimizers.Adam(lr=learning_rate, beta_1=beta1)
-dc_optimizer = tf.keras.optimizers.Adam(lr=learning_rate/5, beta_1=beta1)
+dc_optimizer = tf.keras.optimizers.Adam(lr=learning_rate / 5, beta_1=beta1)
 gen_optimizer = tf.keras.optimizers.Adam(lr=learning_rate, beta_1=beta1)
 
 batch_size = 256
@@ -140,7 +139,7 @@ def train_step(batch_x, batch_y):
 
     with tf.GradientTape() as gen_tape, tf.GradientTape() as dc_tape, tf.GradientTape() as ae_tape:
         encoder_output = encoder(batch_x, training=True)
-        decoder_output = decoder(tf.concat([encoder_output, tf.one_hot(batch_y,n_labels)], axis=1), training=True)
+        decoder_output = decoder(tf.concat([encoder_output, tf.one_hot(batch_y, n_labels)], axis=1), training=True)
 
         d_real = discriminator(real_distribution, training=True)
         d_fake = discriminator(encoder_output, training=True)
@@ -186,12 +185,12 @@ for epoch in range(n_epochs):
     epoch_time = time.time() - start
     print('EPOCH: {}, TIME: {}, ETA: {},  AE_LOSS: {},  DC_LOSS: {},  GEN_LOSS: {}'.format(epoch, epoch_time,
                                                                                            epoch_time * (
-                                                                                                       n_epochs - epoch),
+                                                                                                   n_epochs - epoch),
                                                                                            epoch_ae_loss_avg.result(),
                                                                                            epoch_dc_loss_avg.result(),
                                                                                            epoch_gen_loss_avg.result()))
     if epoch % 5 == 0:
-
+        # Latent Space
         x_test_encoded = encoder(x_test[:2000], training=False)
         label_list = list(y_test[:2000])
         fig = plt.figure()
@@ -213,6 +212,7 @@ for epoch in range(n_epochs):
         fig.clf()
         plt.close()
 
+        # Conditioned Sampling
         z_dim = 2
         n_labels = 10
         nx, ny = 10, 10
@@ -237,5 +237,3 @@ for epoch in range(n_epochs):
 
         plt.savefig(style_dir / ('epoch_%d.png' % epoch))
         plt.close()
-
-
