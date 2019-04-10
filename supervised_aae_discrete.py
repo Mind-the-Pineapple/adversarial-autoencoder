@@ -22,8 +22,8 @@ output_dir.mkdir(exist_ok=True)
 experiment_dir = output_dir / 'supervised'
 experiment_dir.mkdir(exist_ok=True)
 
-latent_sampling_dir = experiment_dir / 'latent_sampling'
-latent_sampling_dir.mkdir(exist_ok=True)
+latent_space_dir = experiment_dir / 'latent_space'
+latent_space_dir.mkdir(exist_ok=True)
 
 reconstruction_dir = experiment_dir / 'reconstruction'
 reconstruction_dir.mkdir(exist_ok=True)
@@ -91,8 +91,8 @@ def make_discriminator_model():
     x = tf.keras.layers.Dense(h_dim)(x)
     x = tf.keras.layers.LeakyReLU()(x)
     x = tf.keras.layers.Dropout(0.5)(x)
-    reconstruction = tf.keras.layers.Dense(1)(x)
-    model = tf.keras.Model(inputs=encoded, outputs=reconstruction)
+    prediction = tf.keras.layers.Dense(1)(x)
+    model = tf.keras.Model(inputs=encoded, outputs=prediction)
     return model
 
 
@@ -130,11 +130,7 @@ train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
 train_dataset = train_dataset.shuffle(buffer_size=1024)
 train_dataset = train_dataset.batch(batch_size)
 
-test_dataset = tf.data.Dataset.from_tensor_slices((x_test, y_test))
-test_dataset = test_dataset.batch(batch_size)
-
-
-@tf.function  # Make it fast.
+@tf.function
 def train_step(batch_x, batch_y):
     real_distribution = tf.random.normal([batch_size, z_dim], mean=0.0, stddev=1.0)
 
@@ -154,7 +150,7 @@ def train_step(batch_x, batch_y):
         # Generator loss
         gen_loss = generator_loss(d_fake, gen_loss_weight)
 
-        # Discrimminator Acc
+        # Discriminator Acc
         dc_acc = (accuracy(tf.ones_like(d_real), d_real) + accuracy(tf.zeros_like(d_fake), d_fake)) / 2
 
     ae_grads = ae_tape.gradient(ae_loss, encoder.trainable_variables + decoder.trainable_variables)
@@ -186,8 +182,6 @@ for epoch in range(n_epochs):
         epoch_gen_loss_avg(gen_loss)
         epoch_dc_acc_avg(dc_acc)
 
-        loss_value = dc_loss.numpy() + gen_loss.numpy() + ae_loss.numpy()
-
     epoch_time = time.time() - start
     print('{:4d}: TIME: {:.2f} ETA: {:.2f} AE_LOSS: {:.4f} DC_LOSS: {:.4f} DC_ACC: {:.4f} GEN_LOSS: {:.4f}' \
           .format(epoch, epoch_time,
@@ -199,8 +193,9 @@ for epoch in range(n_epochs):
 
     if epoch % 10 == 0:
         # Latent Space
-        x_test_encoded = encoder(x_test[:2000], training=False)
-        label_list = list(y_test[:2000])
+        x_test_encoded = encoder(x_test, training=False)
+        label_list = list(y_test)
+
         fig = plt.figure()
         classes = set(label_list)
         colormap = plt.cm.rainbow(np.linspace(0, 1, len(classes)))
@@ -213,16 +208,38 @@ for epoch in range(n_epochs):
         ax.legend(handles=handles, shadow=True, bbox_to_anchor=(1.05, 0.45),
                   fancybox=True, loc='center left')
         plt.scatter(x_test_encoded[:, 0], x_test_encoded[:, 1], s=2, **kwargs)
-        ax.set_xlim([-10, 10])
-        ax.set_ylim([-10, 10])
+        ax.set_xlim([-3, 3])
+        ax.set_ylim([-3, 3])
 
-        plt.savefig(latent_sampling_dir / ('epoch_%d.png' % epoch))
-        fig.clf()
-        plt.close()
+        plt.savefig(latent_space_dir / ('epoch_%d.png' % epoch))
+        plt.close('all')
+
+        # Reconstruction
+        n_digits = 20  # how many digits we will display
+        x_test_decoded = decoder(
+            tf.concat([x_test_encoded[:n_digits], tf.one_hot(y_test[:n_digits], n_labels)], axis=1), training=False)
+
+        x_test_decoded = np.reshape(x_test_decoded, [-1, 28, 28]) * 255
+        fig = plt.figure(figsize=(20, 4))
+        for i in range(n_digits):
+            # display original
+            ax = plt.subplot(2, n_digits, i + 1)
+            plt.imshow(x_test[i].reshape(28, 28))
+            plt.gray()
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+            # display reconstruction
+            ax = plt.subplot(2, n_digits, i + 1 + n_digits)
+            plt.imshow(x_test_decoded[i])
+            plt.gray()
+            ax.get_xaxis().set_visible(False)
+            ax.get_yaxis().set_visible(False)
+
+        plt.savefig(reconstruction_dir / ('epoch_%d.png' % epoch))
+        plt.close('all')
 
         # Conditioned Sampling
-        z_dim = 2
-        n_labels = 10
         nx, ny = 10, 10
         random_inputs = np.random.randn(10, z_dim)
         sample_y = np.identity(10)

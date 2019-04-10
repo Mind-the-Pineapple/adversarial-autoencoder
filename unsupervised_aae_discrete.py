@@ -91,8 +91,8 @@ def make_discriminator_model():
     x = tf.keras.layers.Dense(h_dim)(x)
     x = tf.keras.layers.LeakyReLU()(x)
     x = tf.keras.layers.Dropout(0.5)(x)
-    reconstruction = tf.keras.layers.Dense(1)(x)
-    model = tf.keras.Model(inputs=encoded, outputs=reconstruction)
+    prediction = tf.keras.layers.Dense(1)(x)
+    model = tf.keras.Model(inputs=encoded, outputs=prediction)
     return model
 
 
@@ -101,8 +101,8 @@ mse = tf.keras.losses.MeanSquaredError()
 accuracy = tf.keras.metrics.BinaryAccuracy()
 
 
-def autoencoder_loss(inputs, reconstruction, loss_weigth):
-    return loss_weigth * mse(inputs, reconstruction)
+def autoencoder_loss(inputs, reconstruction, loss_weight):
+    return loss_weight * mse(inputs, reconstruction)
 
 
 def discriminator_loss(real_output, generated_output, loss_weight):
@@ -131,7 +131,7 @@ train_dataset = train_dataset.shuffle(buffer_size=1024)
 train_dataset = train_dataset.batch(batch_size)
 
 
-@tf.function  # Make it fast.
+@tf.function
 def train_step(batch_x):
     real_distribution = tf.random.normal([batch_size, z_dim], mean=0.0, stddev=1.0)
 
@@ -151,6 +151,7 @@ def train_step(batch_x):
         # Generator loss
         gen_loss = generator_loss(d_fake, gen_loss_weight)
 
+        # Discriminator Acc
         dc_acc = (accuracy(tf.ones_like(d_real), d_real) + accuracy(tf.zeros_like(d_fake), d_fake)) / 2
 
     ae_grads = ae_tape.gradient(ae_loss, encoder.trainable_variables + decoder.trainable_variables)
@@ -179,10 +180,8 @@ for epoch in range(n_epochs):
 
         epoch_ae_loss_avg(ae_loss)
         epoch_dc_loss_avg(dc_loss)
-        epoch_gen_loss_avg(gen_loss)
         epoch_dc_acc_avg(dc_acc)
-
-        loss_value = dc_loss.numpy() + gen_loss.numpy() + ae_loss.numpy()
+        epoch_gen_loss_avg(gen_loss)
 
     epoch_time = time.time() - start
     print('{:4d}: TIME: {:.2f} ETA: {:.2f} AE_LOSS: {:.4f} DC_LOSS: {:.4f} DC_ACC: {:.4f} GEN_LOSS: {:.4f}' \
@@ -193,10 +192,12 @@ for epoch in range(n_epochs):
                   epoch_dc_acc_avg.result(),
                   epoch_gen_loss_avg.result()))
 
+
     if epoch % 10 == 0:
         # Latent Space
-        x_test_encoded = encoder(x_test[:2000], training=False)
-        label_list = list(y_test[:2000])
+        x_test_encoded = encoder(x_test, training=False)
+        label_list = list(y_test)
+
         fig = plt.figure()
         classes = set(label_list)
         colormap = plt.cm.rainbow(np.linspace(0, 1, len(classes)))
@@ -213,36 +214,34 @@ for epoch in range(n_epochs):
         ax.set_ylim([-3, 3])
 
         plt.savefig(latent_space_dir / ('epoch_%d.png' % epoch))
-        fig.clf()
-        plt.close()
+        plt.close('all')
 
         # Reconstruction
-        n = 10  # how many digits we will display
-        x_test_decoded = decoder(encoder(x_test))
+        n_digits = 20  # how many digits we will display
+        x_test_decoded = decoder(encoder(x_test[:n_digits], training=False), training=False)
         x_test_decoded = np.reshape(x_test_decoded, [-1, 28, 28]) * 255
         fig = plt.figure(figsize=(20, 4))
-        for i in range(n):
+        for i in range(n_digits):
             # display original
-            ax = plt.subplot(2, n, i + 1)
+            ax = plt.subplot(2, n_digits, i + 1)
             plt.imshow(x_test[i].reshape(28, 28))
             plt.gray()
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
             # display reconstruction
-            ax = plt.subplot(2, n, i + 1 + n)
+            ax = plt.subplot(2, n_digits, i + 1 + n_digits)
             plt.imshow(x_test_decoded[i])
             plt.gray()
             ax.get_xaxis().set_visible(False)
             ax.get_yaxis().set_visible(False)
 
         plt.savefig(reconstruction_dir / ('epoch_%d.png' % epoch))
-        fig.clf()
-        plt.close()
+        plt.close('all')
 
         # Sampling
-        x_points = np.linspace(-3, 3, 10).astype(np.float32)
-        y_points = np.linspace(-3, 3, 10).astype(np.float32)
+        x_points = np.linspace(-3, 3, 20).astype(np.float32)
+        y_points = np.linspace(-3, 3, 20).astype(np.float32)
 
         nx, ny = len(x_points), len(y_points)
         plt.subplot()
@@ -251,7 +250,7 @@ for epoch in range(n_epochs):
         for i, g in enumerate(gs):
             z = np.concatenate(([x_points[int(i / ny)]], [y_points[int(i % nx)]]))
             z = np.reshape(z, (1, 2))
-            x = decoder(z).numpy()
+            x = decoder(z, training=False).numpy()
             ax = plt.subplot(g)
             img = np.array(x.tolist()).reshape(28, 28)
             ax.imshow(img, cmap='gray')
@@ -259,5 +258,5 @@ for epoch in range(n_epochs):
             ax.set_yticks([])
             ax.set_aspect('auto')
         plt.savefig(sampling_dir / ('epoch_%d.png' % epoch))
-        fig.clf()
-        plt.close()
+        plt.close('all')
+
