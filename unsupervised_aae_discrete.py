@@ -98,6 +98,7 @@ def make_discriminator_model():
 
 cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 mse = tf.keras.losses.MeanSquaredError()
+accuracy = tf.keras.metrics.BinaryAccuracy()
 
 
 def autoencoder_loss(inputs, reconstruction, loss_weigth):
@@ -125,13 +126,13 @@ gen_optimizer = tf.keras.optimizers.Adam(lr=learning_rate, beta_1=beta1)
 
 batch_size = 256
 # create the database iterator
-train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+train_dataset = tf.data.Dataset.from_tensor_slices((x_train))
 train_dataset = train_dataset.shuffle(buffer_size=1024)
 train_dataset = train_dataset.batch(batch_size)
 
 
 @tf.function  # Make it fast.
-def train_step(batch_x, batch_y):
+def train_step(batch_x):
     real_distribution = tf.random.normal([batch_size, z_dim], mean=0.0, stddev=1.0)
 
     with tf.GradientTape() as gen_tape, tf.GradientTape() as dc_tape, tf.GradientTape() as ae_tape:
@@ -150,6 +151,8 @@ def train_step(batch_x, batch_y):
         # Generator loss
         gen_loss = generator_loss(d_fake, gen_loss_weight)
 
+        dc_acc = (accuracy(tf.ones_like(d_real), d_real) + accuracy(tf.zeros_like(d_fake), d_fake)) / 2
+
     ae_grads = ae_tape.gradient(ae_loss, encoder.trainable_variables + decoder.trainable_variables)
     ae_optimizer.apply_gradients(zip(ae_grads, encoder.trainable_variables + decoder.trainable_variables))
 
@@ -159,7 +162,7 @@ def train_step(batch_x, batch_y):
     gen_grads = gen_tape.gradient(gen_loss, encoder.trainable_variables)
     gen_optimizer.apply_gradients(zip(gen_grads, encoder.trainable_variables))
 
-    return ae_loss, dc_loss, gen_loss
+    return ae_loss, dc_loss, gen_loss, dc_acc
 
 
 n_epochs = 200
@@ -168,26 +171,27 @@ for epoch in range(n_epochs):
 
     epoch_ae_loss_avg = tf.metrics.Mean()
     epoch_dc_loss_avg = tf.metrics.Mean()
+    epoch_dc_acc_avg = tf.metrics.Mean()
     epoch_gen_loss_avg = tf.metrics.Mean()
 
-    for batch, (batch_x, batch_y) in enumerate(train_dataset):
-        ae_loss, dc_loss, gen_loss = train_step(batch_x, batch_y)
+    for batch, (batch_x) in enumerate(train_dataset):
+        ae_loss, dc_loss, gen_loss, dc_acc = train_step(batch_x)
 
         epoch_ae_loss_avg(ae_loss)
         epoch_dc_loss_avg(dc_loss)
         epoch_gen_loss_avg(gen_loss)
+        epoch_dc_acc_avg(dc_acc)
 
         loss_value = dc_loss.numpy() + gen_loss.numpy() + ae_loss.numpy()
 
     epoch_time = time.time() - start
-    print(
-        'EPOCH: {}, TIME: {:.2f}, ETA: {:.2f},  AE_LOSS: {:.4f},  DC_LOSS: {:.4f},  GEN_LOSS: {:.4f}'.format(
-            epoch, epoch_time,
-            epoch_time * (
-                    n_epochs - epoch),
-            epoch_ae_loss_avg.result(),
-            epoch_dc_loss_avg.result(),
-            epoch_gen_loss_avg.result()))
+    print('{:4d}: TIME: {:.2f} ETA: {:.2f} AE_LOSS: {:.4f} DC_LOSS: {:.4f} DC_ACC: {:.4f} GEN_LOSS: {:.4f}' \
+          .format(epoch, epoch_time,
+                  epoch_time * (n_epochs - epoch),
+                  epoch_ae_loss_avg.result(),
+                  epoch_dc_loss_avg.result(),
+                  epoch_dc_acc_avg.result(),
+                  epoch_gen_loss_avg.result()))
 
     if epoch % 10 == 0:
         # Latent Space

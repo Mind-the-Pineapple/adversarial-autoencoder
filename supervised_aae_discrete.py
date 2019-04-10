@@ -98,6 +98,7 @@ def make_discriminator_model():
 
 cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 mse = tf.keras.losses.MeanSquaredError()
+accuracy = tf.keras.metrics.BinaryAccuracy()
 
 
 def autoencoder_loss(inputs, reconstruction, loss_weigth):
@@ -153,6 +154,9 @@ def train_step(batch_x, batch_y):
         # Generator loss
         gen_loss = generator_loss(d_fake, gen_loss_weight)
 
+        # Discrimminator Acc
+        dc_acc = (accuracy(tf.ones_like(d_real), d_real) + accuracy(tf.zeros_like(d_fake), d_fake)) / 2
+
     ae_grads = ae_tape.gradient(ae_loss, encoder.trainable_variables + decoder.trainable_variables)
     ae_optimizer.apply_gradients(zip(ae_grads, encoder.trainable_variables + decoder.trainable_variables))
 
@@ -162,7 +166,7 @@ def train_step(batch_x, batch_y):
     gen_grads = gen_tape.gradient(gen_loss, encoder.trainable_variables)
     gen_optimizer.apply_gradients(zip(gen_grads, encoder.trainable_variables))
 
-    return ae_loss, dc_loss, gen_loss
+    return ae_loss, dc_loss, gen_loss, dc_acc
 
 
 n_epochs = 200
@@ -171,25 +175,29 @@ for epoch in range(n_epochs):
 
     epoch_ae_loss_avg = tf.metrics.Mean()
     epoch_dc_loss_avg = tf.metrics.Mean()
+    epoch_dc_acc_avg = tf.metrics.Mean()
     epoch_gen_loss_avg = tf.metrics.Mean()
 
     for batch, (batch_x, batch_y) in enumerate(train_dataset):
-        ae_loss, dc_loss, gen_loss = train_step(batch_x, batch_y)
+        ae_loss, dc_loss, gen_loss, dc_acc = train_step(batch_x, batch_y)
 
         epoch_ae_loss_avg(ae_loss)
         epoch_dc_loss_avg(dc_loss)
         epoch_gen_loss_avg(gen_loss)
+        epoch_dc_acc_avg(dc_acc)
 
         loss_value = dc_loss.numpy() + gen_loss.numpy() + ae_loss.numpy()
 
     epoch_time = time.time() - start
-    print('EPOCH: {}, TIME: {}, ETA: {},  AE_LOSS: {},  DC_LOSS: {},  GEN_LOSS: {}'.format(epoch, epoch_time,
-                                                                                           epoch_time * (
-                                                                                                   n_epochs - epoch),
-                                                                                           epoch_ae_loss_avg.result(),
-                                                                                           epoch_dc_loss_avg.result(),
-                                                                                           epoch_gen_loss_avg.result()))
-    if epoch % 5 == 0:
+    print('{:4d}: TIME: {:.2f} ETA: {:.2f} AE_LOSS: {:.4f} DC_LOSS: {:.4f} DC_ACC: {:.4f} GEN_LOSS: {:.4f}' \
+          .format(epoch, epoch_time,
+                  epoch_time * (n_epochs - epoch),
+                  epoch_ae_loss_avg.result(),
+                  epoch_dc_loss_avg.result(),
+                  epoch_dc_acc_avg.result(),
+                  epoch_gen_loss_avg.result()))
+
+    if epoch % 10 == 0:
         # Latent Space
         x_test_encoded = encoder(x_test[:2000], training=False)
         label_list = list(y_test[:2000])
