@@ -4,6 +4,7 @@ Deterministic unsupervised adversarial autoencoder.
  We are using:
     - Gaussian distribution as prior distribution.
     - Convolutional layers.
+    - Cyclic learning rate
 """
 import time
 from pathlib import Path
@@ -143,14 +144,22 @@ def generator_loss(fake_output, loss_weight):
 
 
 # -------------------------------------------------------------------------------------------------------------
-# Define optimizers
-learning_rate = 0.0001
-beta1 = 0.5
-beta2 = 0.999
+# Define cyclic learning rate
+base_lr = 0.00025
+max_lr = 0.0025
 
-ae_optimizer = tf.keras.optimizers.Adam(lr=learning_rate)
-dc_optimizer = tf.keras.optimizers.Adam(lr=learning_rate)
-gen_optimizer = tf.keras.optimizers.Adam(lr=learning_rate)
+n_samples = 60000
+step_size = 2 * np.ceil(n_samples / batch_size)
+global_step = 0
+
+# -------------------------------------------------------------------------------------------------------------
+# Define optimizers
+adv_lr = 0.0003
+
+ae_optimizer = tf.keras.optimizers.Adam(lr=base_lr)
+dc_optimizer = tf.keras.optimizers.Adam(lr=adv_lr)
+gen_optimizer = tf.keras.optimizers.Adam(lr=adv_lr)
+
 
 
 @tf.function
@@ -202,14 +211,38 @@ def train_step(batch_x):
 
 # -------------------------------------------------------------------------------------------------------------
 # Training loop
-n_epochs = 200
+n_epochs = 500
 for epoch in range(n_epochs):
     start = time.time()
 
-    if epoch == 150:
-        ae_optimizer.lr = ae_optimizer.lr / 3
-        dc_optimizer.lr = dc_optimizer.lr / 3
-        gen_optimizer.lr = gen_optimizer.lr / 3
+    # Learning rate schedule
+    if epoch == 60:
+        dc_optimizer.lr = dc_optimizer.lr / 5
+        gen_optimizer.lr = gen_optimizer.lr / 5
+
+        base_lr = base_lr / 5
+        max_lr = max_lr / 5
+        step_size = step_size / 2
+
+        print('learning rate changed!')
+
+    if epoch == 100:
+        dc_optimizer.lr = dc_optimizer.lr / 5
+        gen_optimizer.lr = gen_optimizer.lr / 5
+
+        base_lr = base_lr / 5
+        max_lr = max_lr / 5
+        step_size = step_size / 2
+
+        print('learning rate changed!')
+
+    if epoch == 300:
+        dc_optimizer.lr = dc_optimizer.lr / 2
+        gen_optimizer.lr = gen_optimizer.lr / 2
+
+        base_lr = base_lr / 2
+        max_lr = max_lr / 2
+        step_size = step_size / 2
 
         print('learning rate changed!')
 
@@ -218,6 +251,14 @@ for epoch in range(n_epochs):
     epoch_dc_acc_avg = tf.metrics.Mean()
     epoch_gen_loss_avg = tf.metrics.Mean()
     for batch, (batch_x) in enumerate(train_dataset):
+        # -------------------------------------------------------------------------------------------------------------
+        # Calculate cyclic learning rate
+        global_step = global_step + 1
+        cycle = np.floor(1 + global_step / (2 * step_size))
+        x_lr = np.abs(global_step / step_size - 2 * cycle + 1)
+        clr = base_lr + (max_lr - base_lr) * max(0, 1 - x_lr)
+        ae_optimizer.lr = clr
+
         ae_loss, dc_loss, dc_acc, gen_loss = train_step(batch_x)
 
         epoch_ae_loss_avg(ae_loss)

@@ -4,7 +4,7 @@ Deterministic unsupervised adversarial autoencoder.
  We are using:
     - Gaussian distribution as prior distribution.
     - Dense layers.
-    - Cyclic learning rate
+    - Cyclic learning rate.
 """
 import time
 from pathlib import Path
