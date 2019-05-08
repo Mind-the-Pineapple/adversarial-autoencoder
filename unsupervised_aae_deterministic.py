@@ -146,11 +146,10 @@ global_step = 0
 
 # -------------------------------------------------------------------------------------------------------------
 # Define optimizers
-adv_lr = 0.0003
 
 ae_optimizer = tf.keras.optimizers.Adam(lr=base_lr)
-dc_optimizer = tf.keras.optimizers.Adam(lr=adv_lr)
-gen_optimizer = tf.keras.optimizers.Adam(lr=adv_lr)
+dc_optimizer = tf.keras.optimizers.Adam(lr=base_lr)
+gen_optimizer = tf.keras.optimizers.Adam(lr=base_lr)
 
 
 # -------------------------------------------------------------------------------------------------------------
@@ -211,29 +210,23 @@ for epoch in range(n_epochs):
 
     # Learning rate schedule
     if epoch == 60:
-        dc_optimizer.lr = dc_optimizer.lr / 5
-        gen_optimizer.lr = gen_optimizer.lr / 5
+        # dc_optimizer.lr = dc_optimizer.lr / 2
+        # gen_optimizer.lr = gen_optimizer.lr / 2
 
-        base_lr = base_lr / 5
-        max_lr = max_lr / 5
+        base_lr = base_lr / 2
+        max_lr = max_lr / 2
         step_size = step_size / 2
 
         print('learning rate changed!')
 
     if epoch == 100:
-        dc_optimizer.lr = dc_optimizer.lr / 5
-        gen_optimizer.lr = gen_optimizer.lr / 5
-
-        base_lr = base_lr / 5
-        max_lr = max_lr / 5
+        base_lr = base_lr / 2
+        max_lr = max_lr / 2
         step_size = step_size / 2
 
         print('learning rate changed!')
 
     if epoch == 300:
-        dc_optimizer.lr = dc_optimizer.lr / 2
-        gen_optimizer.lr = gen_optimizer.lr / 2
-
         base_lr = base_lr / 2
         max_lr = max_lr / 2
         step_size = step_size / 2
@@ -253,6 +246,8 @@ for epoch in range(n_epochs):
         x_lr = np.abs(global_step / step_size - 2 * cycle + 1)
         clr = base_lr + (max_lr - base_lr) * max(0, 1 - x_lr)
         ae_optimizer.lr = clr
+        dc_optimizer.lr = clr
+        gen_optimizer.lr = clr
 
         ae_loss, dc_loss, dc_acc, gen_loss = train_step(batch_x)
 
