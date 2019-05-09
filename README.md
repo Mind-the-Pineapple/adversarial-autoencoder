@@ -23,3 +23,11 @@ Reconstruction
 ![Latent space](figs/unsupervised_aae_deterministic_convolutional/reconstruction.png)
 Sampled
 ![Latent space](figs/unsupervised_aae_deterministic_convolutional/sampling.png)
+
+### Unsupervised AAE deterministic convolutional using WGAN loss function
+Latent space
+![Latent space](figs/unsupervised_aae_deterministic_convolutional_wasserstein/latent.png)
+Reconstruction
+![Latent space](figs/unsupervised_aae_deterministic_convolutional_wasserstein/reconstruction.png)
+Sampled
+![Latent space](figs/unsupervised_aae_deterministic_convolutional_wasserstein/sampling.png)
