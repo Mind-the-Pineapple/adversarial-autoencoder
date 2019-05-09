@@ -1,5 +1,10 @@
 """
+Deterministic supervised adversarial autoencoder.
 
+ We are using:
+    - Gaussian distribution as prior distribution.
+    - Dense layers.
+    - Cyclic learning rate.
 """
 import time
 from pathlib import Path
@@ -10,16 +15,19 @@ import matplotlib.patches as mpatches
 import numpy as np
 import tensorflow as tf
 
-PROJECT_ROOT = Path('/media/kcl_1/HDD/PycharmProjects/adversarial-autoencoder')
+PROJECT_ROOT = Path.cwd()
 
+# -------------------------------------------------------------------------------------------------------------
 # Set random seed
-tf.random.set_seed(42)
-np.random.seed(42)
+random_seed = 42
+tf.random.set_seed(random_seed)
+np.random.seed(random_seed)
 
+# -------------------------------------------------------------------------------------------------------------
 output_dir = PROJECT_ROOT / 'outputs'
 output_dir.mkdir(exist_ok=True)
 
-experiment_dir = output_dir / 'supervised'
+experiment_dir = output_dir / 'supervised_aae_deterministic'
 experiment_dir.mkdir(exist_ok=True)
 
 latent_space_dir = experiment_dir / 'latent_space'
@@ -31,6 +39,7 @@ reconstruction_dir.mkdir(exist_ok=True)
 style_dir = experiment_dir / 'style'
 style_dir.mkdir(exist_ok=True)
 
+# -------------------------------------------------------------------------------------------------------------
 # Loading data
 print("Loading data...")
 (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
@@ -38,24 +47,25 @@ print("Loading data...")
 x_train = x_train.astype('float32') / 255.
 x_test = x_test.astype('float32') / 255.
 
-# flatten the dataset
+# Flatten the dataset
 x_train = x_train.reshape((-1, 28 * 28))
 x_test = x_test.reshape((-1, 28 * 28))
 
-# CREATE MODEL
-image_size = 784
+# -------------------------------------------------------------------------------------------------------------
+# Create the dataset iterator
 batch_size = 256
+train_buf = 60000
+
+train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
+train_dataset = train_dataset.shuffle(buffer_size=train_buf)
+train_dataset = train_dataset.batch(batch_size)
+
+# -------------------------------------------------------------------------------------------------------------
+# Create models
+image_size = 784
 h_dim = 1000
 z_dim = 2
 n_labels = 10
-
-ae_loss_weight = 1.
-gen_loss_weight = 1.
-dc_loss_weight = 1.
-
-learning_rate = 0.001
-beta1 = 0.9
-
 
 def make_encoder_model():
     inputs = tf.keras.Input(shape=(image_size,))
@@ -96,78 +106,114 @@ def make_discriminator_model():
     return model
 
 
+encoder = make_encoder_model()
+decoder = make_decoder_model()
+discriminator = make_discriminator_model()
+
+# -------------------------------------------------------------------------------------------------------------
+# Define loss functions
+ae_loss_weight = 1.
+gen_loss_weight = 1.
+dc_loss_weight = 1.
+
 cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 mse = tf.keras.losses.MeanSquaredError()
 accuracy = tf.keras.metrics.BinaryAccuracy()
 
 
-def autoencoder_loss(inputs, reconstruction, loss_weigth):
-    return loss_weigth * mse(inputs, reconstruction)
+def autoencoder_loss(inputs, reconstruction, loss_weight):
+    return loss_weight * mse(inputs, reconstruction)
 
 
-def discriminator_loss(real_output, generated_output, loss_weight):
+def discriminator_loss(real_output, fake_output, loss_weight):
     loss_real = cross_entropy(tf.ones_like(real_output), real_output)
-    loss_fake = cross_entropy(tf.zeros_like(generated_output), generated_output)
-
+    loss_fake = cross_entropy(tf.zeros_like(fake_output), fake_output)
     return loss_weight * (loss_fake + loss_real)
 
 
-def generator_loss(generated_output, loss_weight):
-    return loss_weight * cross_entropy(tf.ones_like(generated_output), generated_output)
+def generator_loss(fake_output, loss_weight):
+    return loss_weight * cross_entropy(tf.ones_like(fake_output), fake_output)
 
 
-encoder = make_encoder_model()
-decoder = make_decoder_model()
-discriminator = make_discriminator_model()
+# -------------------------------------------------------------------------------------------------------------
+# Define cyclic learning rate
+base_lr = 0.00025
+max_lr = 0.0025
 
-ae_optimizer = tf.keras.optimizers.Adam(lr=learning_rate, beta_1=beta1)
-dc_optimizer = tf.keras.optimizers.Adam(lr=learning_rate / 5, beta_1=beta1)
-gen_optimizer = tf.keras.optimizers.Adam(lr=learning_rate, beta_1=beta1)
+n_samples = 60000
+step_size = 2 * np.ceil(n_samples / batch_size)
+global_step = 0
 
-batch_size = 256
-# create the database iterator
-train_dataset = tf.data.Dataset.from_tensor_slices((x_train, y_train))
-train_dataset = train_dataset.shuffle(buffer_size=1024)
-train_dataset = train_dataset.batch(batch_size)
+# -------------------------------------------------------------------------------------------------------------
+# Define optimizers
+ae_optimizer = tf.keras.optimizers.Adam(lr=base_lr)
+dc_optimizer = tf.keras.optimizers.Adam(lr=base_lr)
+gen_optimizer = tf.keras.optimizers.Adam(lr=base_lr)
 
+
+# -------------------------------------------------------------------------------------------------------------
+# Training function
 @tf.function
 def train_step(batch_x, batch_y):
-    real_distribution = tf.random.normal([batch_size, z_dim], mean=0.0, stddev=1.0)
-
-    with tf.GradientTape() as gen_tape, tf.GradientTape() as dc_tape, tf.GradientTape() as ae_tape:
+    # -------------------------------------------------------------------------------------------------------------
+    # Autoencoder
+    with tf.GradientTape() as ae_tape:
         encoder_output = encoder(batch_x, training=True)
         decoder_output = decoder(tf.concat([encoder_output, tf.one_hot(batch_y, n_labels)], axis=1), training=True)
-
-        d_real = discriminator(real_distribution, training=True)
-        d_fake = discriminator(encoder_output, training=True)
 
         # Autoencoder loss
         ae_loss = autoencoder_loss(batch_x, decoder_output, ae_loss_weight)
 
-        # Discrimminator Loss
-        dc_loss = discriminator_loss(d_real, d_fake, dc_loss_weight)
-
-        # Generator loss
-        gen_loss = generator_loss(d_fake, gen_loss_weight)
-
-        # Discriminator Acc
-        dc_acc = (accuracy(tf.ones_like(d_real), d_real) + accuracy(tf.zeros_like(d_fake), d_fake)) / 2
-
     ae_grads = ae_tape.gradient(ae_loss, encoder.trainable_variables + decoder.trainable_variables)
     ae_optimizer.apply_gradients(zip(ae_grads, encoder.trainable_variables + decoder.trainable_variables))
+
+    # -------------------------------------------------------------------------------------------------------------
+    # Discriminator
+    with tf.GradientTape() as dc_tape:
+        real_distribution = tf.random.normal([batch_x.shape[0], z_dim], mean=0.0, stddev=1.0)
+        encoder_output = encoder(batch_x, training=True)
+
+        dc_real = discriminator(real_distribution, training=True)
+        dc_fake = discriminator(encoder_output, training=True)
+
+        # Discriminator Loss
+        dc_loss = discriminator_loss(dc_real, dc_fake, dc_loss_weight)
+
+        # Discriminator Acc
+        dc_acc = accuracy(tf.concat([tf.ones_like(dc_real), tf.zeros_like(dc_fake)], axis=0),
+                          tf.concat([dc_real, dc_fake], axis=0))
 
     dc_grads = dc_tape.gradient(dc_loss, discriminator.trainable_variables)
     dc_optimizer.apply_gradients(zip(dc_grads, discriminator.trainable_variables))
 
+    # -------------------------------------------------------------------------------------------------------------
+    # Generator (Encoder)
+    with tf.GradientTape() as gen_tape:
+        encoder_output = encoder(batch_x, training=True)
+        dc_fake = discriminator(encoder_output, training=True)
+
+        # Generator loss
+        gen_loss = generator_loss(dc_fake, gen_loss_weight)
+
     gen_grads = gen_tape.gradient(gen_loss, encoder.trainable_variables)
     gen_optimizer.apply_gradients(zip(gen_grads, encoder.trainable_variables))
 
-    return ae_loss, dc_loss, gen_loss, dc_acc
+    return ae_loss, dc_loss, dc_acc, gen_loss
 
 
-n_epochs = 200
+# -------------------------------------------------------------------------------------------------------------
+# Training loop
+n_epochs = 350
 for epoch in range(n_epochs):
     start = time.time()
+
+    # Learning rate schedule
+    if epoch in [60, 100, 300]:
+        base_lr = base_lr / 2
+        max_lr = max_lr / 2
+        step_size = step_size / 2
+
+        print('learning rate changed!')
 
     epoch_ae_loss_avg = tf.metrics.Mean()
     epoch_dc_loss_avg = tf.metrics.Mean()
@@ -175,12 +221,22 @@ for epoch in range(n_epochs):
     epoch_gen_loss_avg = tf.metrics.Mean()
 
     for batch, (batch_x, batch_y) in enumerate(train_dataset):
-        ae_loss, dc_loss, gen_loss, dc_acc = train_step(batch_x, batch_y)
+        # -------------------------------------------------------------------------------------------------------------
+        # Calculate cyclic learning rate
+        global_step = global_step + 1
+        cycle = np.floor(1 + global_step / (2 * step_size))
+        x_lr = np.abs(global_step / step_size - 2 * cycle + 1)
+        clr = base_lr + (max_lr - base_lr) * max(0, 1 - x_lr)
+        ae_optimizer.lr = clr
+        dc_optimizer.lr = clr
+        gen_optimizer.lr = clr
+
+        ae_loss, dc_loss, dc_acc, gen_loss = train_step(batch_x, batch_y)
 
         epoch_ae_loss_avg(ae_loss)
         epoch_dc_loss_avg(dc_loss)
-        epoch_gen_loss_avg(gen_loss)
         epoch_dc_acc_avg(dc_acc)
+        epoch_gen_loss_avg(gen_loss)
 
     epoch_time = time.time() - start
     print('{:4d}: TIME: {:.2f} ETA: {:.2f} AE_LOSS: {:.4f} DC_LOSS: {:.4f} DC_ACC: {:.4f} GEN_LOSS: {:.4f}' \
@@ -191,8 +247,9 @@ for epoch in range(n_epochs):
                   epoch_dc_acc_avg.result(),
                   epoch_gen_loss_avg.result()))
 
+    # -------------------------------------------------------------------------------------------------------------
     if epoch % 10 == 0:
-        # Latent Space
+        # Latent space of test set
         x_test_encoded = encoder(x_test, training=False)
         label_list = list(y_test)
 
