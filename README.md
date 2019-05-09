@@ -31,3 +31,19 @@ Reconstruction
 ![Latent space](figs/unsupervised_aae_deterministic_convolutional_wasserstein/reconstruction.png)
 Sampled
 ![Latent space](figs/unsupervised_aae_deterministic_convolutional_wasserstein/sampling.png)
+
+### Unsupervised AAE deterministic
+Latent space
+![Latent space](figs/supervised_aae_deterministic/latent.png)
+Reconstruction
+![Latent space](figs/supervised_aae_deterministic/reconstruction.png)
+Sampled
+![Latent space](figs/supervised_aae_deterministic/style.png)
+
+### Unsupervised AAE deterministic convolutional
+Latent space
+![Latent space](figs/supervised_aae_deterministic_convolutional/latent.png)
+Reconstruction
+![Latent space](figs/supervised_aae_deterministic_convolutional/reconstruction.png)
+Sampled
+![Latent space](figs/supervised_aae_deterministic_convolutional/style.png)
