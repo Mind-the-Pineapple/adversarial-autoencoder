@@ -146,7 +146,6 @@ global_step = 0
 
 # -------------------------------------------------------------------------------------------------------------
 # Define optimizers
-
 ae_optimizer = tf.keras.optimizers.Adam(lr=base_lr)
 dc_optimizer = tf.keras.optimizers.Adam(lr=base_lr)
 gen_optimizer = tf.keras.optimizers.Adam(lr=base_lr)
@@ -171,7 +170,7 @@ def train_step(batch_x):
     # -------------------------------------------------------------------------------------------------------------
     # Discriminator
     with tf.GradientTape() as dc_tape:
-        real_distribution = tf.random.normal([batch_size, z_dim], mean=0.0, stddev=1.0)
+        real_distribution = tf.random.normal([batch_x.shape[0], z_dim], mean=0.0, stddev=1.0)
         encoder_output = encoder(batch_x, training=True)
 
         dc_real = discriminator(real_distribution, training=True)

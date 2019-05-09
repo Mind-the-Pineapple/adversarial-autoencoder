@@ -177,7 +177,7 @@ def train_step(batch_x):
     # -------------------------------------------------------------------------------------------------------------
     # Discriminator
     with tf.GradientTape() as dc_tape:
-        real_distribution = tf.random.normal([batch_size, 1, 1, z_dim], mean=0.0, stddev=1.0)
+        real_distribution = tf.random.normal([batch_x.shape[0], 1, 1, z_dim], mean=0.0, stddev=1.0)
         encoder_output = encoder(batch_x, training=True)
 
         dc_real = discriminator(real_distribution, training=True)
