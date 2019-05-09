@@ -15,3 +15,11 @@ Reconstruction
 ![Latent space](figs/unsupervised_aae_deterministic/reconstruction.png)
 Sampled
 ![Latent space](figs/unsupervised_aae_deterministic/sampling.png)
+
+### Unsupervised AAE deterministic convolutional
+Latent space
+![Latent space](figs/unsupervised_aae_deterministic_convolutional/latent.png)
+Reconstruction
+![Latent space](figs/unsupervised_aae_deterministic_convolutional/reconstruction.png)
+Sampled
+![Latent space](figs/unsupervised_aae_deterministic_convolutional/sampling.png)
