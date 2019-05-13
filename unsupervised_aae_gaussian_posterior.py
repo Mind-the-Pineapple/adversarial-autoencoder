@@ -173,7 +173,6 @@ def train_step(batch_x):
 
     # -------------------------------------------------------------------------------------------------------------
     # Discriminator
-
     with tf.GradientTape() as dc_tape:
         real_distribution = tf.random.normal([batch_x.shape[0], z_dim], mean=0.0, stddev=1.0)
         z_mean, z_std = encoder(batch_x, training=True)
@@ -287,7 +286,6 @@ for epoch in range(n_epochs):
 
         # Reconstruction
         n_digits = 20  # how many digits we will display
-
         z_mean, z_std = encoder(x_test, training=False)
         x_test_decoded = decoder(z_mean, training=False)
         x_test_decoded = np.reshape(x_test_decoded, [-1, 28, 28]) * 255
